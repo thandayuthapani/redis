@@ -6307,12 +6307,22 @@ invalid_args:
 
 static int clusterManagerCommandCall(int argc, char **argv) {
     int port = 0, i;
+    int is_master = 0, is_slave = 0;
     char *ip = NULL;
     if (!getClusterHostFromCmdArgs(1, argv, &ip, &port)) goto invalid_args;
     clusterManagerNode *refnode = clusterManagerNewNode(ip, port);
     if (!clusterManagerLoadInfoFromNode(refnode, 0)) return 0;
     argc--;
     argv++;
+    if (!strcmp(argv[0], "master")) {
+        is_master = 1;
+        argc--;
+        argv++;
+    } else if (!strcmp(argv[0], "slave")) {
+        is_slave = 1;
+        argc--;
+        argv++;
+    }
     size_t *argvlen = zmalloc(argc*sizeof(size_t));
     clusterManagerLogInfo(">>> Calling");
     for (i = 0; i < argc; i++) {
@@ -6325,6 +6335,8 @@ static int clusterManagerCommandCall(int argc, char **argv) {
     listRewind(cluster_manager.nodes, &li);
     while ((ln = listNext(&li)) != NULL) {
         clusterManagerNode *n = ln->value;
+        if (is_master && (n->replicate != NULL)) continue;  // continue if node is slave
+        if (is_slave && (n->replicate == NULL)) continue;   // continue if node is master
         if (!n->context && !clusterManagerNodeConnect(n)) continue;
         redisReply *reply = NULL;
         redisAppendCommandArgv(n->context, argc, (const char **) argv, argvlen);
