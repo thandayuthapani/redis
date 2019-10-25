@@ -123,6 +123,9 @@
 #define CLUSTER_MANAGER_CMD_FLAG_COLOR          1 << 8
 #define CLUSTER_MANAGER_CMD_FLAG_CHECK_OWNERS   1 << 9
 
+#define CLUSTER_MANAGER_MASTERS_ONLY_MODE    1 << 0
+#define CLUSTER_MANAGER_SLAVES_ONLY_MODE     1 << 1
+
 #define CLUSTER_MANAGER_OPT_GETFRIENDS  1 << 0
 #define CLUSTER_MANAGER_OPT_COLD        1 << 1
 #define CLUSTER_MANAGER_OPT_UPDATE      1 << 2
@@ -172,6 +175,7 @@ typedef struct clusterManagerCommand {
     char **argv;
     int flags;
     int replicas;
+    int mode;
     char *from;
     char *to;
     char **weight;
@@ -1532,6 +1536,24 @@ static int parseOptions(int argc, char **argv) {
             i = j;
         } else if (!strcmp(argv[i],"--cluster") && lastarg) {
             usage();
+        } else if ((!strcmp(argv[i],"--cluster-only-masters") && !lastarg)) {
+            char *cmd = argv[++i];
+            int j = i;
+            while (j < argc && argv[j][0] != '-') j++;
+            if (j > i) j--;
+            createClusterManagerCommand(cmd, j - i, argv + i + 1);
+            i = j;
+            config.cluster_manager_command.mode |=
+                    CLUSTER_MANAGER_MASTERS_ONLY_MODE;
+        } else if ((!strcmp(argv[i],"--cluster-only-slaves") && !lastarg)) {
+            char *cmd = argv[++i];
+            int j = i;
+            while (j < argc && argv[j][0] != '-') j++;
+            if (j > i) j--;
+            createClusterManagerCommand(cmd, j - i, argv + i + 1);
+            i = j;
+            config.cluster_manager_command.mode |=
+                    CLUSTER_MANAGER_SLAVES_ONLY_MODE;
         } else if (!strcmp(argv[i],"--cluster-replicas") && !lastarg) {
             config.cluster_manager_command.replicas = atoi(argv[++i]);
         } else if (!strcmp(argv[i],"--cluster-master-id") && !lastarg) {
@@ -6307,22 +6329,12 @@ invalid_args:
 
 static int clusterManagerCommandCall(int argc, char **argv) {
     int port = 0, i;
-    int is_master = 0, is_slave = 0;
     char *ip = NULL;
     if (!getClusterHostFromCmdArgs(1, argv, &ip, &port)) goto invalid_args;
     clusterManagerNode *refnode = clusterManagerNewNode(ip, port);
     if (!clusterManagerLoadInfoFromNode(refnode, 0)) return 0;
     argc--;
     argv++;
-    if (!strcmp(argv[0], "master")) {
-        is_master = 1;
-        argc--;
-        argv++;
-    } else if (!strcmp(argv[0], "slave")) {
-        is_slave = 1;
-        argc--;
-        argv++;
-    }
     size_t *argvlen = zmalloc(argc*sizeof(size_t));
     clusterManagerLogInfo(">>> Calling");
     for (i = 0; i < argc; i++) {
@@ -6335,8 +6347,10 @@ static int clusterManagerCommandCall(int argc, char **argv) {
     listRewind(cluster_manager.nodes, &li);
     while ((ln = listNext(&li)) != NULL) {
         clusterManagerNode *n = ln->value;
-        if (is_master && (n->replicate != NULL)) continue;  // continue if node is slave
-        if (is_slave && (n->replicate == NULL)) continue;   // continue if node is master
+        if ((config.cluster_manager_command.mode & CLUSTER_MANAGER_MASTERS_ONLY_MODE)
+              && (n->replicate != NULL)) continue;  // continue if node is slave
+        if ((config.cluster_manager_command.mode & CLUSTER_MANAGER_SLAVES_ONLY_MODE)
+              && (n->replicate == NULL)) continue;   // continue if node is master
         if (!n->context && !clusterManagerNodeConnect(n)) continue;
         redisReply *reply = NULL;
         redisAppendCommandArgv(n->context, argc, (const char **) argv, argvlen);
