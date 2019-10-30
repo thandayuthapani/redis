@@ -122,9 +122,8 @@
 #define CLUSTER_MANAGER_CMD_FLAG_COPY           1 << 7
 #define CLUSTER_MANAGER_CMD_FLAG_COLOR          1 << 8
 #define CLUSTER_MANAGER_CMD_FLAG_CHECK_OWNERS   1 << 9
-
-#define CLUSTER_MANAGER_MASTERS_ONLY_MODE    1 << 0
-#define CLUSTER_MANAGER_SLAVES_ONLY_MODE     1 << 1
+#define CLUSTER_MANAGER_CMD_FLAG_MASTERS_ONLY   1 << 10
+#define CLUSTER_MANAGER_CMD_FLAG_SLAVES_ONLY    1 << 11
 
 #define CLUSTER_MANAGER_OPT_GETFRIENDS  1 << 0
 #define CLUSTER_MANAGER_OPT_COLD        1 << 1
@@ -175,7 +174,6 @@ typedef struct clusterManagerCommand {
     char **argv;
     int flags;
     int replicas;
-    int mode;
     char *from;
     char *to;
     char **weight;
@@ -1536,24 +1534,12 @@ static int parseOptions(int argc, char **argv) {
             i = j;
         } else if (!strcmp(argv[i],"--cluster") && lastarg) {
             usage();
-        } else if ((!strcmp(argv[i],"--cluster-only-masters") && !lastarg)) {
-            char *cmd = argv[++i];
-            int j = i;
-            while (j < argc && argv[j][0] != '-') j++;
-            if (j > i) j--;
-            createClusterManagerCommand(cmd, j - i, argv + i + 1);
-            i = j;
-            config.cluster_manager_command.mode |=
-                    CLUSTER_MANAGER_MASTERS_ONLY_MODE;
-        } else if ((!strcmp(argv[i],"--cluster-only-slaves") && !lastarg)) {
-            char *cmd = argv[++i];
-            int j = i;
-            while (j < argc && argv[j][0] != '-') j++;
-            if (j > i) j--;
-            createClusterManagerCommand(cmd, j - i, argv + i + 1);
-            i = j;
-            config.cluster_manager_command.mode |=
-                    CLUSTER_MANAGER_SLAVES_ONLY_MODE;
+        } else if ((!strcmp(argv[i],"--cluster-only-masters"))) {
+            config.cluster_manager_command.flags |=
+                    CLUSTER_MANAGER_CMD_FLAG_MASTERS_ONLY;
+        } else if ((!strcmp(argv[i],"--cluster-only-slaves"))) {
+            config.cluster_manager_command.flags |=
+                    CLUSTER_MANAGER_CMD_FLAG_SLAVES_ONLY;
         } else if (!strcmp(argv[i],"--cluster-replicas") && !lastarg) {
             config.cluster_manager_command.replicas = atoi(argv[++i]);
         } else if (!strcmp(argv[i],"--cluster-master-id") && !lastarg) {
@@ -2302,6 +2288,8 @@ clusterManagerCommandDef clusterManagerCommands[] = {
      "from <arg>,copy,replace"},
     {"backup", clusterManagerCommandBackup, 2,  "host:port backup_directory",
      NULL},
+    {"masters-only", NULL, 0, NULL, "only-masters"},
+    {"slaves-only", NULL, 0, NULL, "only-slaves"},
     {"help", clusterManagerCommandHelp, 0, NULL, NULL}
 };
 
@@ -6347,9 +6335,9 @@ static int clusterManagerCommandCall(int argc, char **argv) {
     listRewind(cluster_manager.nodes, &li);
     while ((ln = listNext(&li)) != NULL) {
         clusterManagerNode *n = ln->value;
-        if ((config.cluster_manager_command.mode & CLUSTER_MANAGER_MASTERS_ONLY_MODE)
+        if ((config.cluster_manager_command.flags & CLUSTER_MANAGER_CMD_FLAG_MASTERS_ONLY)
               && (n->replicate != NULL)) continue;  // continue if node is slave
-        if ((config.cluster_manager_command.mode & CLUSTER_MANAGER_SLAVES_ONLY_MODE)
+        if ((config.cluster_manager_command.flags & CLUSTER_MANAGER_CMD_FLAG_SLAVES_ONLY)
               && (n->replicate == NULL)) continue;   // continue if node is master
         if (!n->context && !clusterManagerNodeConnect(n)) continue;
         redisReply *reply = NULL;
