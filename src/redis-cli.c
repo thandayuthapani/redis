@@ -2281,15 +2281,13 @@ clusterManagerCommandDef clusterManagerCommands[] = {
      "new_host:new_port existing_host:existing_port", "slave,master-id <arg>"},
     {"del-node", clusterManagerCommandDeleteNode, 2, "host:port node_id",NULL},
     {"call", clusterManagerCommandCall, -2,
-        "host:port command arg arg .. arg", NULL},
+        "host:port command arg arg .. arg", "only-masters,only-slaves"},
     {"set-timeout", clusterManagerCommandSetTimeout, 2,
      "host:port milliseconds", NULL},
     {"import", clusterManagerCommandImport, 1, "host:port",
      "from <arg>,copy,replace"},
     {"backup", clusterManagerCommandBackup, 2,  "host:port backup_directory",
      NULL},
-    {"masters-only", NULL, 0, NULL, "only-masters"},
-    {"slaves-only", NULL, 0, NULL, "only-slaves"},
     {"help", clusterManagerCommandHelp, 0, NULL, NULL}
 };
 
