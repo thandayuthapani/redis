@@ -57,3 +57,36 @@ test "Nodes should report cluster_state is ok now" {
 test "It is possible to write and read from the cluster" {
     cluster_write_test 0
 }
+
+source "../tests/includes/init-tests.tcl"
+
+# Create a cluster with 3 master and 3 slaves
+test "Create a 3 nodes cluster" {
+    create_cluster 3 3
+}
+
+test "Cluster is up" {
+    assert_cluster_state ok
+}
+
+test "test only-masters option in call command" {
+    set output [exec \
+        ../../../src/redis-cli --cluster call \
+        127.0.0.1:[get_instance_attrib redis 0 port] \
+        --cluster-only-masters set foo bar  >@ stdout]
+    set count 0
+    while {[gets $output line] > -1} {incr count}
+
+    assert_equal $count 3
+}
+
+test "test only-slaves option in call command" {
+    set output [exec \
+        ../../../src/redis-cli --cluster call \
+        127.0.0.1:[get_instance_attrib redis 0 port] \
+        --cluster-only-slaves set foo bar  >@ stdout]
+    set count 0
+    while {[gets $output line] > -1} {incr count}
+
+    assert_equal $count 3
+}
