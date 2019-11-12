@@ -870,7 +870,7 @@ static void benchmark(char *title, char *cmd, int len) {
     config.requests_finished = 0;
 
     if (config.num_threads) initBenchmarkThreads();
-    
+
     int thread_id = config.num_threads > 0 ? 0 : -1;
     c = createClient(cmd,len,NULL,thread_id);
     createMissingClients(c);
@@ -1642,6 +1642,14 @@ int main(int argc, const char **argv) {
             data = data << config.datasize;
             len = redisFormatCommand(&cmd,"INCRBY key:{tag}:__rand_int__ %lld", data);
             benchmark("INCRBY",cmd,len);
+            free(cmd);
+        }
+
+        if (test_is_selected("decrby")) {
+            long long data = 1;
+            data = data << config.datasize;
+            len = redisFormatCommand(&cmd,"DECRBY key:{tag}:__rand_int__ %lld", data);
+            benchmark("DECRBY",cmd,len);
             free(cmd);
         }
 
